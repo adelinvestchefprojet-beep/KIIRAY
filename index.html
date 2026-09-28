@@ -1357,9 +1357,9 @@ ${isSetPw? `
 <button class="submit" id="authSubmit">Activer mon compte</button>
 ` : `
 <div class="login-mode-toggle"><button type="button" class="login-mode-btn active" id="loginModeEmail">E-mail</button><button type="button" class="login-mode-btn" id="loginModePhone">Téléphone</button></div>
-<div class="field" id="fieldEmail"><label>Adresse e-mail</label><input id="authEmail" type="email"></div>
+<div class="field" id="fieldEmail"><label>Adresse e-mail</label><input id="authEmail" type="email" value="${ADMIN_EMAIL}" autocomplete="username"></div>
 <div class="field" id="fieldPhone" style="display:none"><label>Téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67"></div>
-<div class="field"><label>Mot de passe</label><input id="authPw" type="password"></div>
+<div class="field"><label>Mot de passe</label><input id="authPw" type="password" value="${ADMIN_PASSWORD}" autocomplete="current-password"></div>
 <button class="submit" id="authSubmit">Se connecter</button>
 `}
 <div id="authError" class="auth-error">${errorMsg||''}</div>
