@@ -1640,33 +1640,7 @@ async function submitLogin(){
   await activateAuthenticatedUser(data.user,profile);
  }catch(e){ if(errEl) errEl.textContent=e.message||'Connexion impossible. Réessayez.'; if(btn){btn.disabled=false;btn.textContent='Se connecter';} }
 }
-async function submitSignup(){
- const name=(document.getElementById('authName')?.value||'').trim();
- const phone=phoneE164(document.getElementById('authPhone')?.value||'');
- const pw=document.getElementById('authPw')?.value||'';
- const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
- if(!supabaseAuthConfigured() || !authClient){ if(errEl) errEl.textContent='Connexion sécurisée non configurée. Renseignez Supabase dans le fichier.'; return; }
- if(name.length<2 || !phone || pw.length<10){ if(errEl) errEl.textContent='Indiquez votre nom, un téléphone valide et un mot de passe de 10 caractères minimum.'; return; }
- const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Création…';}
- try{
-  const {data,error}=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
-  if(error) throw error;
-  pendingPhone=phone;
-  if(data.session && data.user){ renderAuthScreen('pending','Inscription reçue. Votre compte doit être validé par l’administrateur.'); await authClient.auth.signOut(); }
-  else { renderAuthScreen('verify-phone','Un code de vérification a été envoyé par SMS.'); }
- }catch(e){ if(errEl) errEl.textContent=e.message||'Inscription impossible. Vérifiez le numéro.'; if(btn){btn.disabled=false;btn.textContent='Créer mon compte';} }
-}
-async function verifySignupPhone(){
- const token=(document.getElementById('authOtp')?.value||'').trim();
- const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
- if(!authClient || !pendingPhone || !/^\d{6}$/.test(token)){ if(errEl) errEl.textContent='Saisissez le code SMS à 6 chiffres.'; return; }
- try{
-  const {data,error}=await authClient.auth.verifyOtp({phone:pendingPhone,token,type:'sms'});
-  if(error) throw error;
-  renderAuthScreen('pending','Numéro vérifié. Votre compte est maintenant en attente de validation par l’administrateur.');
-  await authClient.auth.signOut();
- }catch(e){ if(errEl) errEl.textContent=e.message||'Code invalide ou expiré.'; }
-}
+// Ancien parcours d'inscription Supabase par SMS supprimé : les membres utilisent maintenant les RPC de demande d'accès.
 async function submitSetPassword(){ renderAuthScreen('login'); }
 async function logout(){
  try{ if(authClient) await authClient.auth.signOut(); localStorage.removeItem(LS_SESSION_KEY); }catch(e){}
@@ -1711,7 +1685,7 @@ el.style.display='flex'; el.style.minHeight='100dvh'; el.style.width='100%';
 const isSetPw = mode==='set-password';
 const isAdminLogin = mode==='admin-login';
 const isSignup = mode==='signup';
-const isVerify = mode==='verify-phone';
+const isVerify = false; // Le parcours d'inscription SMS est désactivé pour les membres.
 const isPending = mode==='pending';
 el.innerHTML=`
 <style>
