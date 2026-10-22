@@ -1,0 +1,86 @@
+-- MOUV SUITE — première création sécurisée du compte administrateur
+-- À exécuter UNE FOIS dans Supabase > SQL Editor.
+-- Cette migration ne supprime aucune table ni aucune donnée.
+-- Le bootstrap est limité au numéro prévu +221 77 441 16 33.
+begin;
+
+create or replace function public.mouv_first_admin_exists()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.mouv_profiles p
+    where p.role::text = 'qg_national'
+  );
+$$;
+
+revoke all on function public.mouv_first_admin_exists() from public;
+grant execute on function public.mouv_first_admin_exists() to anon, authenticated;
+
+create or replace function public.mouv_bootstrap_first_admin()
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_user auth.users%rowtype;
+  v_phone text;
+  v_name text;
+begin
+  if auth.uid() is null then
+    raise exception 'Vous devez confirmer le compte téléphone avant la configuration.';
+  end if;
+
+  -- Sérialise les tentatives concurrentes : un seul premier administrateur.
+  perform pg_advisory_xact_lock(hashtext('mouv_suite_first_admin_bootstrap'));
+
+  if exists (
+    select 1 from public.mouv_profiles p
+    where p.role::text = 'qg_national'
+  ) then
+    raise exception 'Un administrateur national existe déjà. Configuration initiale fermée.';
+  end if;
+
+  select u.*
+    into v_user
+  from auth.users u
+  where u.id = auth.uid();
+
+  if v_user.id is null then
+    raise exception 'Compte Auth introuvable.';
+  end if;
+
+  v_phone := regexp_replace(coalesce(v_user.phone, ''), '[^0-9]', '', 'g');
+  if v_phone <> '221774411633' then
+    raise exception 'La première configuration est réservée au numéro +221 77 441 16 33.';
+  end if;
+
+  if v_user.phone_confirmed_at is null then
+    raise exception 'Le numéro doit être confirmé avant de créer le profil administrateur.';
+  end if;
+
+  if exists (select 1 from public.mouv_profiles p where p.id = v_user.id) then
+    raise exception 'Un profil existe déjà pour ce compte. Vérifiez-le avant de continuer.';
+  end if;
+
+  v_name := nullif(trim(coalesce(v_user.raw_user_meta_data->>'full_name', '')), '');
+  if v_name is null then
+    raise exception 'Nom complet manquant. Recommencez la configuration avec votre nom.';
+  end if;
+
+  insert into public.mouv_profiles (id, phone, full_name, role, status)
+  values (v_user.id, v_user.phone, v_name, 'qg_national', 'active');
+
+  return true;
+end;
+$$;
+
+revoke all on function public.mouv_bootstrap_first_admin() from public, anon;
+grant execute on function public.mouv_bootstrap_first_admin() to authenticated;
+
+commit;
