@@ -58,9 +58,11 @@ using (
     and (
       coordinator_auth_id = auth.uid()
       or lower(commune) = lower(coalesce((
-        select p2.full_name
-        from public.mouv_profiles p2
-        where p2.id = auth.uid()
+        select own_member.commune
+        from public.mouv_annuaire_members own_member
+        where own_member.coordinator_auth_id = auth.uid()
+          and own_member.member_role = 'coordinateur'
+        order by own_member.created_at
         limit 1
       ), ''))
     )
@@ -121,11 +123,21 @@ begin
     raise exception 'Connexion requise.';
   end if;
 
-  select p.role::text, p.full_name
-    into v_role, v_commune
+  select p.role::text
+    into v_role
   from public.mouv_profiles p
   where p.id = auth.uid()
     and p.status::text = 'active';
+
+  if v_role = 'coordinateur' then
+    select own_member.commune
+      into v_commune
+    from public.mouv_annuaire_members own_member
+    where own_member.coordinator_auth_id = auth.uid()
+      and own_member.member_role = 'coordinateur'
+    order by own_member.created_at
+    limit 1;
+  end if;
 
   if v_role is null then
     raise exception 'Profil actif introuvable.';
