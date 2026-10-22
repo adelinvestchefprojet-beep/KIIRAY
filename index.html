@@ -1786,7 +1786,7 @@ async function submitAdminBootstrap(){
    const login=await authClient.auth.signInWithPassword({phone,password:pw});
    if(!login.error && login.data?.user){ await finishAdminBootstrap(login.data.user,name); return; }
    const signup=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
-   if(signup.error) throw new Error('Impossible de créer ce compte. Le numéro possède peut-être déjà un compte ou le mot de passe est incorrect. Si le compte existe, reconnectez-vous avec son mot de passe ou réinitialisez-le dans Supabase.');
+   if(signup.error){ const detail=signup.error.message||signup.error.code||'Erreur inconnue'; throw new Error('Supabase refuse la création du compte : '+detail+'. Vérifiez dans Supabase > Authentication > Users si le numéro existe déjà, que les inscriptions sont autorisées et que le fournisseur SMS est configuré. Aucun profil administrateur n’a été créé par cette tentative.'); }
    if(signup.data?.session && signup.data?.user){ await finishAdminBootstrap(signup.data.user,name); return; }
    renderAuthScreen('admin-verify','Un code de confirmation a été envoyé au +221 77 441 16 33. Saisissez-le pour terminer la création.');
  }catch(e){ if(errEl) errEl.textContent=e.message||'La création de l’administrateur a échoué.'; if(btn){btn.disabled=false;btn.textContent='Créer mon accès administrateur';} }
