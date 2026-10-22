@@ -1717,6 +1717,49 @@ async function submitLogin(){
   await activateAuthenticatedUser(data.user,profile);
  }catch(e){ if(errEl) errEl.textContent=e.message||'Connexion impossible. Réessayez.'; if(btn){btn.disabled=false;btn.textContent='Se connecter';} }
 }
+async function finishAdminBootstrap(user, fullName){
+ const {data,error}=await authClient.rpc('mouv_bootstrap_first_admin',{p_full_name:fullName});
+ if(error) throw error;
+ if(data!==true) throw new Error('La base n’a pas confirmé la création du profil administrateur.');
+ const profile=await fetchAuthenticatedProfile(user);
+ await activateAuthenticatedUser(user,profile);
+}
+async function submitAdminBootstrap(){
+ const name=(document.getElementById('authName')?.value||'').trim();
+ const phone=phoneE164(document.getElementById('authPhone')?.value||'');
+ const pw=document.getElementById('authPw')?.value||'';
+ const pw2=document.getElementById('authPw2')?.value||'';
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient || !supabaseAuthConfigured()){ if(errEl) errEl.textContent='Connexion Supabase non configurée.'; return; }
+ if(name.length<2){ if(errEl) errEl.textContent='Indiquez votre nom complet.'; return; }
+ if(phone!=='+221774411633'){ if(errEl) errEl.textContent='La première configuration est réservée au +221 77 441 16 33.'; return; }
+ if(pw.length<10){ if(errEl) errEl.textContent='Choisissez un mot de passe d’au moins 10 caractères.'; return; }
+ if(pw!==pw2){ if(errEl) errEl.textContent='Les deux mots de passe ne correspondent pas.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Configuration…';}
+ try{
+   pendingAdminPhone=phone; pendingAdminName=name;
+   const login=await authClient.auth.signInWithPassword({phone,password:pw});
+   if(!login.error && login.data?.user){ await finishAdminBootstrap(login.data.user,name); return; }
+   const signup=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
+   if(signup.error){ throw new Error('Impossible de créer ce compte. Le numéro possède peut-être déjà un compte ou le mot de passe est incorrect. Si le compte existe, reconnectez-vous avec son mot de passe ou réinitialisez-le dans Supabase.'); }
+   if(signup.data?.session && signup.data?.user){ await finishAdminBootstrap(signup.data.user,name); return; }
+   renderAuthScreen('admin-verify','Un code de confirmation a été envoyé au +221 77 441 16 33. Saisissez-le pour terminer la création.');
+ }catch(e){ if(errEl) errEl.textContent=e.message||'La création de l’administrateur a échoué.'; if(btn){btn.disabled=false;btn.textContent='Créer mon accès administrateur';} }
+}
+async function verifyAdminBootstrap(){
+ const phone=phoneE164(document.getElementById('authPhone')?.value||pendingAdminPhone||'');
+ const token=(document.getElementById('authOtp')?.value||'').trim();
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient || phone!=='+221774411633'){ if(errEl) errEl.textContent='Le numéro de vérification n’est pas valide.'; return; }
+ if(!/^\d{6}$/.test(token)){ if(errEl) errEl.textContent='Saisissez le code SMS à 6 chiffres.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Vérification…';}
+ try{
+   const {data,error}=await authClient.auth.verifyOtp({phone,token,type:'sms'});
+   if(error) throw error;
+   if(!data?.user) throw new Error('Vérification réussie mais session utilisateur absente. Reconnectez-vous.');
+   await finishAdminBootstrap(data.user,pendingAdminName);
+ }catch(e){ if(errEl) errEl.textContent=e.message||'La vérification du téléphone a échoué.'; if(btn){btn.disabled=false;btn.textContent='Confirmer et activer l’administrateur';} }
+}
 // Ancien parcours d'inscription Supabase par SMS supprimé : les membres utilisent maintenant les RPC de demande d'accès.
 async function submitSetPassword(){ renderAuthScreen('login'); }
 async function logout(){
