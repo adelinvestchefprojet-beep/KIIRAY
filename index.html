@@ -429,6 +429,8 @@ const LS_SESSION_KEY = 'mouv_suite_session_v1';
 let authClient = null;
 let authenticatedProfile = null;
 let pendingPhone = '';
+let pendingAdminPhone = '';
+let pendingAdminName = '';
 let simpleMemberProfile = null;
 function supabaseAuthConfigured(){ const c=window.MOUV_SUPABASE_CONFIG||{}; return !!(window.supabase && c.url && c.anonKey && !c.url.includes('VOTRE-PROJET') && !c.anonKey.includes('VOTRE_CLE')); }
 if(supabaseAuthConfigured()){ authClient=window.supabase.createClient(window.MOUV_SUPABASE_CONFIG.url,window.MOUV_SUPABASE_CONFIG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); }
@@ -1760,6 +1762,43 @@ async function verifyAdminBootstrap(){
    await finishAdminBootstrap(data.user,pendingAdminName);
  }catch(e){ if(errEl) errEl.textContent=e.message||'La vérification du téléphone a échoué.'; if(btn){btn.disabled=false;btn.textContent='Confirmer et activer l’administrateur';} }
 }
+async function finishAdminBootstrap(user, fullName){
+ const {data,error}=await authClient.rpc('mouv_bootstrap_first_admin',{p_full_name:fullName});
+ if(error) throw error; if(data!==true) throw new Error('La base n’a pas confirmé la création du profil administrateur.');
+ const profile=await fetchAuthenticatedProfile(user); await activateAuthenticatedUser(user,profile);
+}
+async function submitAdminBootstrap(){
+ const name=(document.getElementById('authName')?.value||'').trim();
+ const phone=phoneE164(document.getElementById('authPhone')?.value||'');
+ const pw=document.getElementById('authPw')?.value||''; const pw2=document.getElementById('authPw2')?.value||'';
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient || !supabaseAuthConfigured()){ if(errEl) errEl.textContent='Connexion Supabase non configurée.'; return; }
+ if(name.length<2){ if(errEl) errEl.textContent='Indiquez votre nom complet.'; return; }
+ if(phone!=='+221774411633'){ if(errEl) errEl.textContent='La première configuration est réservée au +221 77 441 16 33.'; return; }
+ if(pw.length<10){ if(errEl) errEl.textContent='Choisissez un mot de passe d’au moins 10 caractères.'; return; }
+ if(pw!==pw2){ if(errEl) errEl.textContent='Les deux mots de passe ne correspondent pas.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Configuration…';}
+ try{ pendingAdminPhone=phone; pendingAdminName=name;
+   const login=await authClient.auth.signInWithPassword({phone,password:pw});
+   if(!login.error && login.data?.user){ await finishAdminBootstrap(login.data.user,name); return; }
+   const signup=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
+   if(signup.error) throw new Error('Impossible de créer ce compte. Le numéro possède peut-être déjà un compte ou le mot de passe est incorrect. Si le compte existe, reconnectez-vous avec son mot de passe ou réinitialisez-le dans Supabase.');
+   if(signup.data?.session && signup.data?.user){ await finishAdminBootstrap(signup.data.user,name); return; }
+   renderAuthScreen('admin-verify','Un code de confirmation a été envoyé au +221 77 441 16 33. Saisissez-le pour terminer la création.');
+ }catch(e){ if(errEl) errEl.textContent=e.message||'La création de l’administrateur a échoué.'; if(btn){btn.disabled=false;btn.textContent='Créer mon accès administrateur';} }
+}
+async function verifyAdminBootstrap(){
+ const phone=phoneE164(document.getElementById('authPhone')?.value||pendingAdminPhone||'');
+ const token=(document.getElementById('authOtp')?.value||'').trim();
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient || phone!=='+221774411633'){ if(errEl) errEl.textContent='Le numéro de vérification n’est pas valide.'; return; }
+ if(!/^\d{6}$/.test(token)){ if(errEl) errEl.textContent='Saisissez le code SMS à 6 chiffres.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Vérification…';}
+ try{ const {data,error}=await authClient.auth.verifyOtp({phone,token,type:'sms'}); if(error) throw error;
+   if(!data?.user) throw new Error('Vérification réussie mais session utilisateur absente. Reconnectez-vous.');
+   await finishAdminBootstrap(data.user,pendingAdminName);
+ }catch(e){ if(errEl) errEl.textContent=e.message||'La vérification du téléphone a échoué.'; if(btn){btn.disabled=false;btn.textContent='Confirmer et activer l’administrateur';} }
+}
 // Ancien parcours d'inscription Supabase par SMS supprimé : les membres utilisent maintenant les RPC de demande d'accès.
 async function submitSetPassword(){ renderAuthScreen('login'); }
 async function logout(){
@@ -1804,6 +1843,8 @@ if(!el) return;
 el.style.display='flex'; el.style.minHeight='100dvh'; el.style.width='100%';
 const isSetPw = mode==='set-password';
 const isAdminLogin = mode==='admin-login';
+const isAdminSetup = mode==='admin-setup';
+const isAdminVerify = mode==='admin-verify';
 const isSignup = mode==='signup';
 const isVerify = false; // Le parcours d'inscription SMS est désactivé pour les membres.
 const isPending = mode==='pending';
@@ -1852,9 +1893,9 @@ el.innerHTML=`
 </div>
 <div class="form-panel"><div class="form-wrap">
 <span class="logo-full auth-logo" role="img" aria-label="Kiiraay, les patriotes républicains. La patrie d'abord."></span>
-<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':isAdminLogin?'Accès administrateur':isSignup?'Inscription membre':isVerify?'Vérification du téléphone':isPending?'Validation administrative':'Accès membre'}</div>
-<h2>${isSetPw?'Activez votre compte':isAdminLogin?'Connexion administrateur':isSignup?'Créer un compte':isVerify?'Vérifier le numéro':isPending?'Demande enregistrée':'Accéder à mon espace'}</h2>
-<p class="sub">${isSetPw?'Définissez votre mot de passe.':isAdminLogin?'Réservé à l’administrateur de MOUV SUITE.':isSignup?'Renseignez simplement votre nom et votre téléphone. L’accès sera ouvert après validation.':isVerify?'Saisissez le code reçu par SMS.':isPending?'Votre demande est enregistrée. L’accès sera ouvert après validation par l’administrateur.':'Renseignez votre nom complet et votre numéro de téléphone.'}</p>
+<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':isAdminLogin?'Accès administrateur':isAdminSetup?'Première configuration administrateur':isAdminVerify?'Vérification administrateur':isSignup?'Inscription membre':isVerify?'Vérification du téléphone':isPending?'Validation administrative':'Accès membre'}</div>
+<h2>${isSetPw?'Activez votre compte':isAdminLogin?'Connexion administrateur':isAdminSetup?'Créer le premier accès administrateur':isAdminVerify?'Confirmer le téléphone':isSignup?'Créer un compte':isVerify?'Vérifier le numéro':isPending?'Demande enregistrée':'Accéder à mon espace'}</h2>
+<p class="sub">${isSetPw?'Définissez votre mot de passe.':isAdminLogin?'Réservé à l’administrateur de MOUV SUITE.':isAdminSetup?'Créez le premier compte avec le numéro autorisé. Choisissez un mot de passe robuste d’au moins 10 caractères.':isAdminVerify?'Saisissez le code SMS envoyé au +221 77 441 16 33.':isSignup?'Renseignez simplement votre nom et votre téléphone. L’accès sera ouvert après validation.':isVerify?'Saisissez le code reçu par SMS.':isPending?'Votre demande est enregistrée. L’accès sera ouvert après validation par l’administrateur.':'Renseignez votre nom complet et votre numéro de téléphone.'}</p>
 ${isSetPw ? `
 <div class="field"><label>Nouveau mot de passe</label><input id="authPw1" type="password" autocomplete="new-password"></div>
 <div class="field"><label>Confirmez</label><input id="authPw2" type="password" autocomplete="new-password"></div>
@@ -1863,6 +1904,17 @@ ${isSetPw ? `
 <div class="field"><label>Numéro de téléphone administrateur</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
 <div class="field"><label>Mot de passe</label><input id="authPw" type="password" autocomplete="current-password" required></div>
 <button class="submit" id="authSubmit">Se connecter</button>
+<button type="button" id="authBootstrapBtn" class="submit" style="display:none;margin-top:10px;background:var(--grad-deep);">Première configuration administrateur</button>
+` : isAdminSetup ? `
+<div class="field"><label>Nom complet de l’administrateur</label><input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Nom complet" required></div>
+<div class="field"><label>Numéro autorisé</label><input id="authPhone" type="tel" value="+221 77 441 16 33" autocomplete="tel" required></div>
+<div class="field"><label>Nouveau mot de passe (10 caractères minimum)</label><input id="authPw" type="password" autocomplete="new-password" minlength="10" required></div>
+<div class="field"><label>Confirmer le mot de passe</label><input id="authPw2" type="password" autocomplete="new-password" minlength="10" required></div>
+<button class="submit" id="authSubmit">Créer mon accès administrateur</button>
+` : isAdminVerify ? `
+<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" value="+221 77 441 16 33" autocomplete="tel" required></div>
+<div class="field"><label>Code reçu par SMS</label><input id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Code SMS" required></div>
+<button class="submit" id="authSubmit">Confirmer et activer l’administrateur</button>
 ` : isSignup ? `
 <div class="field"><label>Nom complet</label><input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Ex. : Amadou Ndiaye" required></div>
 <div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="77 123 45 67" autocomplete="tel" required></div>
@@ -1878,13 +1930,16 @@ ${isSetPw ? `
 <button class="submit" id="authSubmit">Accéder à mon espace</button>
 `}
 <div id="authError" class="auth-error">${errorMsg||''}</div>
-${(!isSetPw && !isVerify && !isPending && !isAdminLogin)?`<p class="footnote">${isSignup?'Déjà une demande ?':'Nouveau membre ?'} <button type="button" id="authSwitch" style="border:0;background:none;color:var(--green-700);font-weight:700;cursor:pointer;text-decoration:underline;">${isSignup?'Accéder à mon espace':'Demander l’accès'}</button></p><p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Accès administrateur</button></p>`:isAdminLogin?`<p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Retour à l’accès membre</button></p>`:''}
+${(!isSetPw && !isVerify && !isPending && !isAdminLogin && !isAdminSetup && !isAdminVerify)?`<p class="footnote">${isSignup?'Déjà une demande ?':'Nouveau membre ?'} <button type="button" id="authSwitch" style="border:0;background:none;color:var(--green-700);font-weight:700;cursor:pointer;text-decoration:underline;">${isSignup?'Accéder à mon espace':'Demander l’accès'}</button></p><p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Accès administrateur</button></p>`:isAdminLogin?`<p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Retour à l’accès membre</button></p>`:(isAdminSetup||isAdminVerify)?`<p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Retour à la connexion administrateur</button></p>`:''}
 </div></div>`;
-const submit = isSetPw ? submitSetPassword : isAdminLogin ? submitLogin : (isSignup || (!isVerify && !isPending)) ? submitSimpleMember : isVerify ? verifySignupPhone : isPending ? (()=>renderAuthScreen('login')) : submitLogin;
+const submit = isSetPw ? submitSetPassword : isAdminLogin ? submitLogin : isAdminSetup ? submitAdminBootstrap : isAdminVerify ? verifyAdminBootstrap : (isSignup || (!isVerify && !isPending)) ? submitSimpleMember : isVerify ? verifySignupPhone : isPending ? (()=>renderAuthScreen('login')) : submitLogin;
 const submitBtn=document.getElementById('authSubmit'); if(submitBtn) submitBtn.onclick=submit;
 const switchBtn=document.getElementById('authSwitch'); if(switchBtn) switchBtn.onclick=()=>renderAuthScreen(isSignup?'login':'signup');
-const adminSwitch=document.getElementById('authAdminSwitch'); if(adminSwitch) adminSwitch.onclick=()=>renderAuthScreen(isAdminLogin?'login':'admin-login');
-setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':isVerify?'authOtp':isAdminLogin?'authPhone':'authName'); if(f) f.focus(); },0);
+const adminSwitch=document.getElementById('authAdminSwitch'); if(adminSwitch) adminSwitch.onclick=()=>renderAuthScreen(isAdminSetup||isAdminVerify?'admin-login':isAdminLogin?'login':'admin-login');
+const bootstrapBtn=document.getElementById('authBootstrapBtn');
+if(bootstrapBtn) bootstrapBtn.onclick=()=>renderAuthScreen('admin-setup');
+if(isAdminLogin && authClient){ authClient.rpc('mouv_first_admin_exists').then(({data,error})=>{ const b=document.getElementById('authBootstrapBtn'); if(b && !error && data===false) b.style.display='block'; }).catch(()=>{}); }
+setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':(isVerify||isAdminVerify)?'authOtp':isAdminLogin?'authPhone':'authName'); if(f) f.focus(); },0);
 el.querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter' && submitBtn){ e.preventDefault(); submit(); } }));
 }
 
