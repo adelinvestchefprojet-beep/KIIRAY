@@ -21,7 +21,7 @@ $$;
 revoke all on function public.mouv_first_admin_exists() from public;
 grant execute on function public.mouv_first_admin_exists() to anon, authenticated;
 
-create or replace function public.mouv_bootstrap_first_admin()
+create or replace function public.mouv_bootstrap_first_admin(p_full_name text)
 returns boolean
 language plpgsql
 security definer
@@ -68,7 +68,7 @@ begin
     raise exception 'Un profil existe déjà pour ce compte. Vérifiez-le avant de continuer.';
   end if;
 
-  v_name := nullif(trim(coalesce(v_user.raw_user_meta_data->>'full_name', '')), '');
+  v_name := nullif(trim(coalesce(p_full_name, v_user.raw_user_meta_data->>'full_name', '')), '');
   if v_name is null then
     raise exception 'Nom complet manquant. Recommencez la configuration avec votre nom.';
   end if;
@@ -80,7 +80,7 @@ begin
 end;
 $$;
 
-revoke all on function public.mouv_bootstrap_first_admin() from public, anon;
-grant execute on function public.mouv_bootstrap_first_admin() to authenticated;
+revoke all on function public.mouv_bootstrap_first_admin(text) from public, anon;
+grant execute on function public.mouv_bootstrap_first_admin(text) to authenticated;
 
 commit;
