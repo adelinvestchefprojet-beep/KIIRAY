@@ -429,6 +429,7 @@ const LS_SESSION_KEY = 'mouv_suite_session_v1';
 let authClient = null;
 let authenticatedProfile = null;
 let pendingPhone = '';
+let simpleMemberProfile = null;
 function supabaseAuthConfigured(){ const c=window.MOUV_SUPABASE_CONFIG||{}; return !!(window.supabase && c.url && c.anonKey && !c.url.includes('VOTRE-PROJET') && !c.anonKey.includes('VOTRE_CLE')); }
 if(supabaseAuthConfigured()){ authClient=window.supabase.createClient(window.MOUV_SUPABASE_CONFIG.url,window.MOUV_SUPABASE_CONFIG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); }
 
@@ -1493,24 +1494,24 @@ async function wireApprovals(){
  const host=document.getElementById('approvalList'); if(!host) return;
  if(!authClient || !isQG(currentUser())){host.innerHTML='<p>Accès réservé à l’administrateur.</p>';return;}
  try{
-  const {data,error}=await authClient.from('mouv_profiles').select('id,phone,full_name,role,status,created_at').eq('status','pending').order('created_at',{ascending:true});
+  const {data,error}=await authClient.rpc('mouv_admin_list_access_requests');
   if(error) throw error;
   if(!data||!data.length){host.innerHTML='<div class="empty-state">Aucune demande en attente.</div>';return;}
   host.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Nom</th><th>Téléphone</th><th>Date</th><th>Décision</th></tr></thead><tbody>${data.map(p=>`<tr><td>${escHtml(p.full_name||'Membre')}</td><td>${escHtml(p.phone||'—')}</td><td>${new Date(p.created_at).toLocaleDateString('fr-FR')}</td><td><button class="btn btn-primary" data-approve-user="${p.id}">Approuver</button> <button class="btn btn-secondary" data-reject-user="${p.id}">Refuser</button></td></tr>`).join('')}</tbody></table></div>`;
   host.querySelectorAll('[data-approve-user]').forEach(b=>b.onclick=()=>changeMemberApproval(b.dataset.approveUser,'active'));
   host.querySelectorAll('[data-reject-user]').forEach(b=>b.onclick=()=>changeMemberApproval(b.dataset.rejectUser,'rejected'));
- }catch(e){console.error(e);host.innerHTML='<p>Impossible de charger les demandes. Vérifiez le SQL et les droits Supabase.</p>';}
+ }catch(e){console.error(e);host.innerHTML='<p>Impossible de charger les demandes. Exécutez le script SQL simplifié fourni avec cette version.</p>';}
 }
 async function changeMemberApproval(userId,status){
  if(!authClient || !isQG(currentUser())) return;
  const label=status==='active'?'approuver':'refuser';
  if(!confirm(`Confirmer : ${label} ce compte ?`)) return;
  try{
-  const {error}=await authClient.rpc('mouv_admin_set_status',{p_user_id:userId,p_status:status});
+  const {error}=await authClient.rpc('mouv_admin_set_access_request_status',{p_request_id:userId,p_status:status});
   if(error) throw error;
-  toast(status==='active'?'Compte approuvé.':'Compte refusé.');
+  toast(status==='active'?'Accès membre approuvé.':'Demande refusée.');
   await wireApprovals();
- }catch(e){console.error(e);toast('Action impossible. Vérifiez les fonctions SQL et les droits.','error');}
+ }catch(e){console.error(e);toast('Action impossible. Vérifiez que le SQL simplifié a été exécuté.','error');}
 }
 
 function renderContent(){
@@ -1599,6 +1600,32 @@ async function activateAuthenticatedUser(user, profile){
  state.currentUserId=profile.role==='qg_national'?ADMIN_PROFILE.id:profile.id;
  await startApp();
 }
+function simpleMemberMode(){ return document.getElementById('authPhone') && !document.getElementById('authPw'); }
+async function submitSimpleMember(){
+ const name=(document.getElementById('authName')?.value||'').trim();
+ const phone=phoneE164(document.getElementById('authPhone')?.value||'');
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient){ if(errEl) errEl.textContent='Connexion au serveur indisponible. Réessayez plus tard.'; return; }
+ if(name.length<2 || !phone){ if(errEl) errEl.textContent='Indiquez votre nom complet et un numéro valide.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Vérification…';}
+ try{
+  const {data,error}=await authClient.rpc('mouv_check_member_access',{p_full_name:name,p_phone:phone});
+  if(error) throw error;
+  const result=Array.isArray(data)?data[0]:data;
+  if(!result || result.status==='not_found'){
+    const {error:requestError}=await authClient.rpc('mouv_request_member_access',{p_full_name:name,p_phone:phone});
+    if(requestError) throw requestError;
+    renderAuthScreen('pending','Votre demande a été envoyée. L’administrateur doit valider votre accès avant la première connexion.');
+    return;
+  }
+  if(result.status==='pending'){ renderAuthScreen('pending','Votre demande est en attente de validation par l’administrateur.'); return; }
+  if(result.status!=='active') throw new Error('Votre accès n’est pas actif. Contactez l’administrateur.');
+  simpleMemberProfile={id:result.id,phone:result.phone,full_name:result.full_name,role:result.role||'militant',status:'active'};
+  authenticatedProfile={...simpleMemberProfile};
+  state.currentUserId=simpleMemberProfile.id;
+  await startApp();
+ }catch(e){ if(errEl) errEl.textContent=e.message||'Impossible de vérifier votre accès.'; if(btn){btn.disabled=false;btn.textContent='Accéder à mon espace';} }
+}
 async function submitLogin(){
  const phone=phoneE164(document.getElementById('authPhone')?.value||'');
  const pw=document.getElementById('authPw')?.value||'';
@@ -1643,7 +1670,7 @@ async function verifySignupPhone(){
 async function submitSetPassword(){ renderAuthScreen('login'); }
 async function logout(){
  try{ if(authClient) await authClient.auth.signOut(); localStorage.removeItem(LS_SESSION_KEY); }catch(e){}
- authenticatedProfile=null; state.currentUserId=null; appStartedFor=null;
+ authenticatedProfile=null; simpleMemberProfile=null; state.currentUserId=null; appStartedFor=null;
  renderAuthScreen('login');
 }
 async function startApp(){
@@ -1682,6 +1709,7 @@ closeMobileSidebar();
 if(!el) return;
 el.style.display='flex'; el.style.minHeight='100dvh'; el.style.width='100%';
 const isSetPw = mode==='set-password';
+const isAdminLogin = mode==='admin-login';
 const isSignup = mode==='signup';
 const isVerify = mode==='verify-phone';
 const isPending = mode==='pending';
@@ -1730,35 +1758,39 @@ el.innerHTML=`
 </div>
 <div class="form-panel"><div class="form-wrap">
 <span class="logo-full auth-logo" role="img" aria-label="Kiiraay, les patriotes républicains. La patrie d'abord."></span>
-<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':isSignup?'Inscription membre':isVerify?'Vérification du téléphone':isPending?'Validation administrative':'Accès équipe'}</div>
-<h2>${isSetPw?'Activez votre compte':isSignup?'Créer un compte':isVerify?'Vérifier le numéro':isPending?'Demande enregistrée':'Se connecter'}</h2>
-<p class="sub">${isSetPw?'Définissez votre mot de passe.':isSignup?'Créez votre compte personnel. L’accès sera ouvert après validation.':isVerify?'Saisissez le code reçu par SMS.':isPending?'Votre compte ne pourra accéder à MOUV SUITE qu’après validation par l’administrateur.':'Connectez-vous avec votre numéro de téléphone et votre mot de passe.'}</p>
+<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':isAdminLogin?'Accès administrateur':isSignup?'Inscription membre':isVerify?'Vérification du téléphone':isPending?'Validation administrative':'Accès membre'}</div>
+<h2>${isSetPw?'Activez votre compte':isAdminLogin?'Connexion administrateur':isSignup?'Créer un compte':isVerify?'Vérifier le numéro':isPending?'Demande enregistrée':'Accéder à mon espace'}</h2>
+<p class="sub">${isSetPw?'Définissez votre mot de passe.':isAdminLogin?'Réservé à l’administrateur de MOUV SUITE.':isSignup?'Renseignez simplement votre nom et votre téléphone. L’accès sera ouvert après validation.':isVerify?'Saisissez le code reçu par SMS.':isPending?'Votre demande est enregistrée. L’accès sera ouvert après validation par l’administrateur.':'Renseignez votre nom complet et votre numéro de téléphone.'}</p>
 ${isSetPw ? `
 <div class="field"><label>Nouveau mot de passe</label><input id="authPw1" type="password" autocomplete="new-password"></div>
 <div class="field"><label>Confirmez</label><input id="authPw2" type="password" autocomplete="new-password"></div>
 <button class="submit" id="authSubmit">Activer mon compte</button>
+` : isAdminLogin ? `
+<div class="field"><label>Numéro de téléphone administrateur</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
+<div class="field"><label>Mot de passe</label><input id="authPw" type="password" autocomplete="current-password" required></div>
+<button class="submit" id="authSubmit">Se connecter</button>
 ` : isSignup ? `
-<div class="field"><label>Nom complet</label><input id="authName" type="text" autocomplete="name" maxlength="120" required></div>
-<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
-<div class="field"><label>Mot de passe (10 caractères minimum)</label><input id="authPw" type="password" autocomplete="new-password" minlength="10" required></div>
-<button class="submit" id="authSubmit">Créer mon compte</button>
+<div class="field"><label>Nom complet</label><input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Ex. : Amadou Ndiaye" required></div>
+<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="77 123 45 67" autocomplete="tel" required></div>
+<button class="submit" id="authSubmit">Demander l’accès</button>
 ` : isVerify ? `
 <div class="field"><label>Code reçu par SMS</label><input id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required></div>
 <button class="submit" id="authSubmit">Vérifier le numéro</button>
 ` : isPending ? `
 <button class="submit" id="authSubmit">Retour à la connexion</button>
 ` : `
-<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
-<div class="field"><label>Mot de passe</label><input id="authPw" type="password" autocomplete="current-password" required></div>
-<button class="submit" id="authSubmit">Se connecter</button>
+<div class="field"><label>Nom complet</label><input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Votre nom complet" required></div>
+<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="77 123 45 67" autocomplete="tel" required></div>
+<button class="submit" id="authSubmit">Accéder à mon espace</button>
 `}
 <div id="authError" class="auth-error">${errorMsg||''}</div>
-${(!isSetPw && !isVerify && !isPending)?`<p class="footnote">${isSignup?'Déjà un compte ?':'Pas encore de compte ?'} <button type="button" id="authSwitch" style="border:0;background:none;color:var(--green-700);font-weight:700;cursor:pointer;text-decoration:underline;">${isSignup?'Se connecter':'Créer un compte membre'}</button></p>`:''}
+${(!isSetPw && !isVerify && !isPending && !isAdminLogin)?`<p class="footnote">${isSignup?'Déjà une demande ?':'Nouveau membre ?'} <button type="button" id="authSwitch" style="border:0;background:none;color:var(--green-700);font-weight:700;cursor:pointer;text-decoration:underline;">${isSignup?'Accéder à mon espace':'Demander l’accès'}</button></p><p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Accès administrateur</button></p>`:isAdminLogin?`<p class="footnote"><button type="button" id="authAdminSwitch" style="border:0;background:none;color:var(--ink-500);cursor:pointer;text-decoration:underline;">Retour à l’accès membre</button></p>`:''}
 </div></div>`;
-const submit = isSetPw ? submitSetPassword : isSignup ? submitSignup : isVerify ? verifySignupPhone : isPending ? (()=>renderAuthScreen('login')) : submitLogin;
+const submit = isSetPw ? submitSetPassword : isAdminLogin ? submitLogin : (isSignup || (!isVerify && !isPending)) ? submitSimpleMember : isVerify ? verifySignupPhone : isPending ? (()=>renderAuthScreen('login')) : submitLogin;
 const submitBtn=document.getElementById('authSubmit'); if(submitBtn) submitBtn.onclick=submit;
 const switchBtn=document.getElementById('authSwitch'); if(switchBtn) switchBtn.onclick=()=>renderAuthScreen(isSignup?'login':'signup');
-setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':isSignup?'authName':isVerify?'authOtp':'authPhone'); if(f) f.focus(); },0);
+const adminSwitch=document.getElementById('authAdminSwitch'); if(adminSwitch) adminSwitch.onclick=()=>renderAuthScreen(isAdminLogin?'login':'admin-login');
+setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':isVerify?'authOtp':isAdminLogin?'authPhone':'authName'); if(f) f.focus(); },0);
 el.querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter' && submitBtn){ e.preventDefault(); submit(); } }));
 }
 
