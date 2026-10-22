@@ -105,7 +105,8 @@ from public.mouv_annuaire_members;
 
 revoke all on public.mouv_annuaire_members from anon, authenticated;
 grant select on public.mouv_annuaire_members to authenticated;
-grant select on public.mouv_public_members to anon, authenticated;
+revoke all on public.mouv_public_members from anon;
+grant select on public.mouv_public_members to authenticated;
 
 -- Fonction sécurisée pour ajouter un membre sans créer un compte Auth pour chaque militant.
 create or replace function public.mouv_add_directory_member(
