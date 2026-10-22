@@ -1778,7 +1778,11 @@ async function submitAdminBootstrap(){
  if(pw.length<10){ if(errEl) errEl.textContent='Choisissez un mot de passe d’au moins 10 caractères.'; return; }
  if(pw!==pw2){ if(errEl) errEl.textContent='Les deux mots de passe ne correspondent pas.'; return; }
  const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Configuration…';}
- try{ pendingAdminPhone=phone; pendingAdminName=name;
+ try{
+   const probe=await authClient.rpc('mouv_first_admin_exists');
+   if(probe.error) throw new Error('Configuration Supabase incomplète : ouvre SUPABASE_MOUV_PREMIER_ADMIN.sql dans le dépôt GitHub, exécute tout le script dans Supabase SQL Editor, puis réessaie. Aucun compte n’a été créé par cette tentative.');
+   if(probe.data!==false) throw new Error('Un administrateur national existe déjà. Utilise la connexion administrateur ou récupère le mot de passe du compte existant.');
+   pendingAdminPhone=phone; pendingAdminName=name;
    const login=await authClient.auth.signInWithPassword({phone,password:pw});
    if(!login.error && login.data?.user){ await finishAdminBootstrap(login.data.user,name); return; }
    const signup=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
@@ -1904,7 +1908,7 @@ ${isSetPw ? `
 <div class="field"><label>Numéro de téléphone administrateur</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
 <div class="field"><label>Mot de passe</label><input id="authPw" type="password" autocomplete="current-password" required></div>
 <button class="submit" id="authSubmit">Se connecter</button>
-<button type="button" id="authBootstrapBtn" class="submit" style="display:none;margin-top:10px;background:var(--grad-deep);">Première configuration administrateur</button>
+<button type="button" id="authBootstrapBtn" class="submit" style="margin-top:10px;background:var(--grad-deep);">Première configuration administrateur</button>
 ` : isAdminSetup ? `
 <div class="field"><label>Nom complet de l’administrateur</label><input id="authName" type="text" autocomplete="name" maxlength="120" placeholder="Nom complet" required></div>
 <div class="field"><label>Numéro autorisé</label><input id="authPhone" type="tel" value="+221 77 441 16 33" autocomplete="tel" required></div>
@@ -1938,7 +1942,7 @@ const switchBtn=document.getElementById('authSwitch'); if(switchBtn) switchBtn.o
 const adminSwitch=document.getElementById('authAdminSwitch'); if(adminSwitch) adminSwitch.onclick=()=>renderAuthScreen(isAdminSetup||isAdminVerify?'admin-login':isAdminLogin?'login':'admin-login');
 const bootstrapBtn=document.getElementById('authBootstrapBtn');
 if(bootstrapBtn) bootstrapBtn.onclick=()=>renderAuthScreen('admin-setup');
-if(isAdminLogin && authClient){ authClient.rpc('mouv_first_admin_exists').then(({data,error})=>{ const b=document.getElementById('authBootstrapBtn'); if(b && !error && data===false) b.style.display='block'; }).catch(()=>{}); }
+// Le bouton reste visible ; le contrôle serveur dans le RPC empêche toute seconde création.
 setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':(isVerify||isAdminVerify)?'authOtp':isAdminLogin?'authPhone':'authName'); if(f) f.focus(); },0);
 el.querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter' && submitBtn){ e.preventDefault(); submit(); } }));
 }
