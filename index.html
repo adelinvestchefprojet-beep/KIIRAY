@@ -184,7 +184,7 @@ ul.plain,ol.plain{margin:0;padding-left:20px;}
 ul.plain li,ol.plain li{font-size:13.6px;color:var(--ink-700);line-height:1.7;}
 .photo-block{margin-bottom:16px;}
 .photo-block:last-child{margin-bottom:0;}
-.photo-block img{width:100%;border-radius:12px;display:block;object-fit:cover;height:190px;background:var(--bg);}
+.photo-block img{width:100%;max-height:520px;min-height:140px;height:auto;aspect-ratio:16/9;border-radius:12px;display:block;object-fit:contain;background:#F1F5F2;cursor:zoom-in;}
 .photo-block .cap{font-size:12.5px;color:var(--ink-600);margin-top:7px;}
 .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;}
 table.tasks-table{width:100%;border-collapse:collapse;min-width:560px;}
@@ -227,7 +227,7 @@ table.tasks-table{width:100%;border-collapse:collapse;min-width:560px;}
 .photo-upload-zone:hover{border-color:var(--blue-500);color:var(--blue-600);}
 .photo-thumbs{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
 .photo-thumb{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px;align-items:center;}
-.photo-thumb img{width:58px;height:58px;object-fit:cover;border-radius:7px;flex-shrink:0;background:var(--bg);}
+.photo-thumb img{width:76px;height:76px;object-fit:contain;border-radius:7px;flex-shrink:0;background:var(--bg);}
 .photo-thumb input{flex:1;border:none;background:none;font-size:12.5px;outline:none;color:var(--ink-900);}
 .side-panel{position:sticky;top:88px;}
 .side-panel .card{margin-bottom:16px;}
@@ -299,11 +299,11 @@ body.drawer-open{overflow:hidden;}
 .pub-access-select{height:34px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px;font-size:11.5px;color:var(--ink-700);}
 .pub-card{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease;}
 .pub-card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(18,45,34,.08);}
-.pub-card-photo{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:11px;margin-top:12px;background:#eef2f0;}
+.pub-card-photo{width:100%;max-height:420px;aspect-ratio:16/9;object-fit:contain;border-radius:11px;margin-top:12px;background:#eef2f0;}
 .pub-card-photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:12px;}
-.pub-card-photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:#eef2f0;}
+.pub-card-photo-grid img{width:100%;aspect-ratio:4/3;object-fit:contain;border-radius:8px;background:#eef2f0;}
 .pub-detail-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
-.pub-detail-photo-grid img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;background:#eef2f0;}
+.pub-detail-photo-grid img{width:100%;max-height:520px;aspect-ratio:4/3;object-fit:contain;border-radius:12px;background:#eef2f0;cursor:zoom-in;}
 .pub-access-list{display:flex;flex-direction:column;gap:7px;}
 .pub-access-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid var(--line-soft);border-radius:9px;background:var(--bg);}
 .pub-access-row .left{display:flex;align-items:center;gap:8px;min-width:0;}
@@ -316,6 +316,18 @@ body.drawer-open{overflow:hidden;}
 @media(max-width:900px){.pub-compose-grid{grid-template-columns:1fr;}.pub-photo-list{grid-template-columns:repeat(4,minmax(0,1fr));}}
 @media(max-width:560px){.pub-member-row{grid-template-columns:24px minmax(0,1fr);}.pub-access-select{grid-column:2;width:100%;}.pub-detail-photo-grid{grid-template-columns:1fr;}}
 
+/* Ajustements d'affichage : photos lisibles, dimensions adaptatives */
+.photo-block img,.pub-card-photo,.pub-card-photo-grid img,.pub-detail-photo-grid img{max-width:100%;}
+.pub-detail-photo-grid{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));}
+@media(max-width:600px){
+  .photo-block img{height:auto;min-height:120px;max-height:360px;aspect-ratio:4/3;object-fit:contain;}
+  .pub-card-photo{max-height:300px;}
+  .pub-card-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .pub-card-photo-grid img{max-height:180px;}
+  .pub-detail-photo-grid{grid-template-columns:1fr;}
+  #content{max-width:100%;min-width:0;}
+}
+/* Fin ajustements d'affichage */
 </style>
 <style id="mobile-enhancements">
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
@@ -397,15 +409,28 @@ table.tasks-table{min-width:0;display:block;}
 <div class="toast-wrap" id="toastWrap"></div>
 <div id="authScreen" style="display:none;"></div>
 <script>
+/* Configurez uniquement l’URL du projet et la clé anon/public Supabase.
+   Ne placez JAMAIS la clé service_role dans ce fichier. */
+window.MOUV_SUPABASE_CONFIG = window.MOUV_SUPABASE_CONFIG || {
+  url: 'https://VOTRE-PROJET.supabase.co',
+  anonKey: 'VOTRE_CLE_ANON_SUPABASE'
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
 /* ==========================================================
    MODE LOCAL (sans Supabase) — accès codé en dur
    Les données sont enregistrées dans le navigateur (localStorage).
    ========================================================== */
 const ADMIN_EMAIL = 'kiiraysn@gmail.com';
-const ADMIN_PASSWORD = 'KIIRAY2026';
 const ADMIN_PROFILE = {id:'u_admin', name:'QG National', role:'qg_national', fonction:'Secrétariat national', email:ADMIN_EMAIL, actif:true, phone:'', phoneNormalized:'', region:'', departement:'', commune:'', coordinateurId:''};
 const LS_DB_KEY = 'mouv_suite_db_v1';
 const LS_SESSION_KEY = 'mouv_suite_session_v1';
+let authClient = null;
+let authenticatedProfile = null;
+let pendingPhone = '';
+function supabaseAuthConfigured(){ const c=window.MOUV_SUPABASE_CONFIG||{}; return !!(window.supabase && c.url && c.anonKey && !c.url.includes('VOTRE-PROJET') && !c.anonKey.includes('VOTRE_CLE')); }
+if(supabaseAuthConfigured()){ authClient=window.supabase.createClient(window.MOUV_SUPABASE_CONFIG.url,window.MOUV_SUPABASE_CONFIG.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); }
 
 const initialAuthHash = window.location.hash;
 const initialReportId = new URLSearchParams(window.location.search).get('report');
@@ -440,7 +465,7 @@ whatsapp:`<path d="M20.5 3.5A10.3 10.3 0 0 0 3.6 16.4L2 22l5.7-1.5A10.3 10.3 0 1
 };
 function icon(name,cls='icon',stroke='currentColor'){ return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 const supabaseReady = false;
-const sb = null;
+const sb = null; // Données métier encore locales : ne pas confondre avec authClient.
 
 const TYPES_ACTIVITE = {reunion_cellule:'Réunion de cellule',porte_a_porte:'Porte-à-porte',meeting:'Meeting',distribution_supports:'Distribution de supports',collecte_adhesions:"Collecte d'adhésions",autre:'Autre'};
 
@@ -480,21 +505,25 @@ const mapNotifFromDb = n => ({id:n.id, userId:n.user_id, reportId:n.report_id, t
 const mapNotifToDb = n => ({id:n.id, user_id:n.userId, report_id:n.reportId||null, text:n.text, created_at:n.createdAt, read:!!n.read});
 
 let _quotaWarned=false;
+function localDbKey(){ return authenticatedProfile && authenticatedProfile.role !== 'qg_national' ? LS_DB_KEY+'_'+authenticatedProfile.id : LS_DB_KEY; }
 function saveLocal(){
-try{ localStorage.setItem(LS_DB_KEY, JSON.stringify({users:DB.users, reports:DB.reports, tasks:DB.tasks, notifications:DB.notifications, publications:DB.publications})); }
+try{ localStorage.setItem(localDbKey(), JSON.stringify({users:DB.users, reports:DB.reports, tasks:DB.tasks, notifications:DB.notifications, publications:DB.publications})); }
 catch(e){ console.error(e); if(!_quotaWarned){ _quotaWarned=true; toast("Espace de stockage plein : supprimez des photos ou des rapports."); } }
 }
 async function sbInsert(table,row){ saveLocal(); return true; }
 async function sbUpdate(table,row,id){ saveLocal(); return true; }
 async function sbDelete(table,id){ saveLocal(); }
 function ensureAdmin(){
-const i=DB.users.findIndex(u=>u.id===ADMIN_PROFILE.id || (u.email||'').toLowerCase()===ADMIN_EMAIL);
-if(i===-1) DB.users.unshift({...ADMIN_PROFILE}); else DB.users[i]={...DB.users[i], ...ADMIN_PROFILE, phone:DB.users[i].phone||'', phoneNormalized:DB.users[i].phoneNormalized||''};
+const p=authenticatedProfile && authenticatedProfile.role==='qg_national' ? authenticatedProfile : null;
+const profile=p?{...ADMIN_PROFILE,id:ADMIN_PROFILE.id,name:p.full_name||'QG National',role:p.role,email:ADMIN_EMAIL,phone:p.phone||'',phoneNormalized:normalizePhoneSN(p.phone||'')||'',actif:true}:({...ADMIN_PROFILE});
+const i=DB.users.findIndex(u=>u.id===profile.id || (u.email||'').toLowerCase()===ADMIN_EMAIL);
+if(i===-1) DB.users.unshift(profile); else DB.users[i]={...DB.users[i], ...profile, phone:DB.users[i].phone||profile.phone||'', phoneNormalized:DB.users[i].phoneNormalized||profile.phoneNormalized||''};
 }
 function loadLocal(){
-let d=null; try{ d=JSON.parse(localStorage.getItem(LS_DB_KEY)||'null'); }catch(e){ console.error(e); }
+let d=null; try{ d=JSON.parse(localStorage.getItem(localDbKey())||'null'); }catch(e){ console.error(e); }
 DB.users=(d&&d.users)||[]; DB.reports=(d&&d.reports)||[]; DB.tasks=(d&&d.tasks)||[]; DB.notifications=(d&&d.notifications)||[]; DB.publications=(d&&d.publications)||[];
-ensureAdmin(); saveLocal();
+if(authenticatedProfile && authenticatedProfile.role==='qg_national') ensureAdmin();
+saveLocal();
 }
 async function loadFromSupabase(){ loadLocal(); }
 async function loadProfiles(){ /* les profils sont déjà en mémoire */ }
@@ -546,13 +575,23 @@ function timeAgo(ts){ const s=Math.floor((Date.now()-ts)/1000); if(s<60) return 
 const DB = { users:[], reports:[], tasks:[], notifications:[], publications:[] };
 function userById(id){ if(!id) return null; return DB.users.find(u=>u.id===id) || null; }
 function isQG(u){ return u && u.role === 'qg_national'; }
+function isSimpleMember(u){ return !!u && u.role === 'militant'; }
+function allowedNavItems(u){
+  if(isSimpleMember(u)) return NAV_ITEMS.filter(it => ['dashboard','reports','publications'].includes(it.id));
+  if(!isQG(u)) return NAV_ITEMS.filter(it => it.id!=='approvals');
+  return NAV_ITEMS;
+}
 function isCoordOrAbove(u){ return u && (u.role === 'coordinateur' || u.role === 'qg_national'); }
 const state = { currentUserId:null, view:'dashboard', reportFilter:'tous', activeReportId:null, editingReportId:null, activePublicationId:null, publicationFilter:'toutes', searchQuery:'' };
 let pendingPasswordSetup = false;
 let appStartedFor = null;
 let deepLinkReportId = initialReportId;
 function currentUser(){return userById(state.currentUserId);}
-function setView(view,params={}){ state.view=view; state.editingReportId=null; Object.assign(state,params); window.scrollTo(0,0); render(); }
+function setView(view,params={}){
+ const u=currentUser();
+ if(isSimpleMember(u) && !['dashboard','reports','report-detail','publications','publication-detail'].includes(view)){ toast('Cette rubrique est réservée aux responsables.'); return; }
+ state.view=view; state.editingReportId=null; Object.assign(state,params); window.scrollTo(0,0); render();
+}
 function toast(msg,type='ok'){
 const wrap=document.getElementById('toastWrap');
 const el=document.createElement('div'); el.className='toast';
@@ -597,13 +636,14 @@ const NAV_ITEMS=[
 {id:'publications',label:'Publications',icon:'image'},
 {id:'new-publication',label:'Nouvelle publication',icon:'filePlus'},
 {id:'tasks',label:'Actions à mener',icon:'tasks'},
+{id:'approvals',label:'Validation des comptes',icon:'usersBadge'},
 ];
 function renderSidebar(){
 const u=currentUser();
 document.getElementById('sidebar').innerHTML=`
 <div class="brand"><div class="brand-mark"><span class="logo-emblem" role="img" aria-label="Kiiraay"></span></div><div class="brand-text"><div class="b1">MOUV&nbsp;SUITE</div><div class="b2">Gestion des activités militantes</div></div></div>
 <nav class="nav">
-${NAV_ITEMS.map(it=>`<button class="nav-item ${state.view===it.id || (state.view==='report-detail' && it.id==='reports')?'active':''}" data-nav="${it.id}">${icon(it.icon)}<span>${it.label}</span></button>`).join('')}
+${allowedNavItems(u).map(it=>`<button class="nav-item ${state.view===it.id || (state.view==='report-detail' && it.id==='reports')?'active':''}" data-nav="${it.id}">${icon(it.icon)}<span>${it.label}</span></button>`).join('')}
 ${isQG(u) ? `<div class="nav-section-label">Administration</div><button class="nav-item ${state.view==='membres'?'active':''}" data-nav="membres">${icon('usersBadge')}<span>Militants & rôles</span></button>` : ''}
 </nav>
 <div class="sidebar-footer"><div style="width:100%">
@@ -737,10 +777,10 @@ function viewPublications(){
   let list=DB.publications.filter(p=>pubCanSee(p,u.id));
   if(state.searchQuery) list=list.filter(p=>(p.text||'').toLowerCase().includes(state.searchQuery.toLowerCase()));
   list.sort((a,b)=>b.createdAt-a.createdAt);
-  return `<div class="page-head"><div><h1>Publications</h1><div class="sub">Messages courts avec photos, diffusés à tous ou à des membres sélectionnés.</div></div>
-    <button class="btn btn-primary" data-nav="new-publication">${icon('plus')} Nouvelle publication</button></div>
+  return `<div class="page-head"><div><h1>Publications</h1><div class="sub">${isSimpleMember(u)?'Consultez les informations et photos partagées avec les membres.':'Messages courts avec photos, diffusés à tous ou à des membres sélectionnés.'}</div></div>
+    ${isSimpleMember(u)?'':`<button class="btn btn-primary" data-nav="new-publication">${icon('plus')} Nouvelle publication</button>`}</div>
     ${list.length?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">${list.map(publicationCard).join('')}</div>`:
-    `<div class="card"><div class="pub-empty">${icon('image','icon')}<div class="t">Aucune publication</div><div class="d">Créez un message et choisissez qui pourra le lire.</div><div style="margin-top:14px;"><button class="btn btn-primary" data-nav="new-publication">${icon('plus')} Créer une publication</button></div></div></div>`}`;
+    `<div class="card"><div class="pub-empty">${icon('image','icon')}<div class="t">Aucune publication</div><div class="d">Créez un message et choisissez qui pourra le lire.</div>${isSimpleMember(u)?'':`<div style="margin-top:14px;"><button class="btn btn-primary" data-nav="new-publication">${icon('plus')} Créer une publication</button></div>`}</div></div>`}`;
 }
 function viewNewPublication(){
   const members=DB.users.filter(x=>x.id!==currentUser().id);
@@ -969,8 +1009,8 @@ const u=currentUser();
 const author=userById(r.createdBy) || {id:'',name:'Militant supprimé'};
 const canValidate = r.status==='en_attente' && (isQG(u) || (u.role==='coordinateur' && r.submittedTo===u.id));
 const canComment = r.status==='publie' || (r.status==='en_attente' && (canValidate || r.createdBy===u.id));
-const canEdit = isQG(u) || r.createdBy===u.id;
-const canDelete = isQG(u) || r.createdBy===u.id;
+const canEdit = !isSimpleMember(u) && (isQG(u) || r.createdBy===u.id);
+const canDelete = !isSimpleMember(u) && (isQG(u) || r.createdBy===u.id);
 return `
 ${r.status==='en_attente'?`<div class="validate-bar"><div class="vb-text">${icon('clock')} En attente de validation par le coordinateur.</div>
 ${canValidate?`<div style="display:flex;gap:9px;"><button class="btn btn-outline btn-sm" id="rejectBtn">${icon('x','icon-sm')} Renvoyer pour révision</button><button class="btn btn-green btn-sm" id="validateBtn">${icon('check','icon-sm')} Valider</button></div>`:`<span class="badge badge-amber">Soumis par ${author.name}</span>`}
@@ -1444,6 +1484,35 @@ setView('reports');
 }
 }
 
+function viewApprovals(){
+ const u=currentUser();
+ if(!isQG(u)) return '<div class="card"><h3>Accès réservé</h3></div>';
+ return `<div class="page-header"><div><h1>Validation des comptes</h1><p>Les nouveaux membres restent bloqués jusqu’à votre validation.</p></div></div><div class="card" id="approvalList"><div class="empty-state">Chargement des demandes…</div></div>`;
+}
+async function wireApprovals(){
+ const host=document.getElementById('approvalList'); if(!host) return;
+ if(!authClient || !isQG(currentUser())){host.innerHTML='<p>Accès réservé à l’administrateur.</p>';return;}
+ try{
+  const {data,error}=await authClient.from('mouv_profiles').select('id,phone,full_name,role,status,created_at').eq('status','pending').order('created_at',{ascending:true});
+  if(error) throw error;
+  if(!data||!data.length){host.innerHTML='<div class="empty-state">Aucune demande en attente.</div>';return;}
+  host.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Nom</th><th>Téléphone</th><th>Date</th><th>Décision</th></tr></thead><tbody>${data.map(p=>`<tr><td>${escHtml(p.full_name||'Membre')}</td><td>${escHtml(p.phone||'—')}</td><td>${new Date(p.created_at).toLocaleDateString('fr-FR')}</td><td><button class="btn btn-primary" data-approve-user="${p.id}">Approuver</button> <button class="btn btn-secondary" data-reject-user="${p.id}">Refuser</button></td></tr>`).join('')}</tbody></table></div>`;
+  host.querySelectorAll('[data-approve-user]').forEach(b=>b.onclick=()=>changeMemberApproval(b.dataset.approveUser,'active'));
+  host.querySelectorAll('[data-reject-user]').forEach(b=>b.onclick=()=>changeMemberApproval(b.dataset.rejectUser,'rejected'));
+ }catch(e){console.error(e);host.innerHTML='<p>Impossible de charger les demandes. Vérifiez le SQL et les droits Supabase.</p>';}
+}
+async function changeMemberApproval(userId,status){
+ if(!authClient || !isQG(currentUser())) return;
+ const label=status==='active'?'approuver':'refuser';
+ if(!confirm(`Confirmer : ${label} ce compte ?`)) return;
+ try{
+  const {error}=await authClient.rpc('mouv_admin_set_status',{p_user_id:userId,p_status:status});
+  if(error) throw error;
+  toast(status==='active'?'Compte approuvé.':'Compte refusé.');
+  await wireApprovals();
+ }catch(e){console.error(e);toast('Action impossible. Vérifiez les fonctions SQL et les droits.','error');}
+}
+
 function renderContent(){
 const c=document.getElementById('content');
 if(state.view==='dashboard') c.innerHTML=viewDashboard();
@@ -1454,6 +1523,7 @@ else if(state.view==='publications') c.innerHTML=viewPublications();
 else if(state.view==='new-publication'){ c.innerHTML=viewNewPublication(); wireNewPublication(); }
 else if(state.view==='publication-detail'){ c.innerHTML=viewPublicationDetail(); wirePublicationDetail(); }
 else if(state.view==='tasks') c.innerHTML=viewTasks();
+else if(state.view==='approvals'){ c.innerHTML=viewApprovals(); wireApprovals(); }
 else if(state.view==='membres'){ c.innerHTML=viewMembres(); wireMembres(); }
 c.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>setView(b.dataset.nav));
 c.querySelectorAll('[data-goto-report]').forEach(b=>b.onclick=()=>setView('report-detail',{activeReportId:b.dataset.gotoReport}));
@@ -1511,43 +1581,97 @@ toast('Commentaire ajouté.'); sbUpdate('reports',{comments:r.comments}, r.id); 
 }
 function render(){ if(DB.users.length) saveLocal(); renderSidebar(); renderTopbar(); renderContent(); const bd=document.getElementById('sidebarBackdrop'); if(bd) bd.onclick=closeMobileSidebar; }
 
-async function submitLogin(){
-const email=(document.getElementById('authEmail')?.value||'').trim().toLowerCase();
-const phoneRaw=document.getElementById('authPhone')?.value.trim();
-const pw=document.getElementById('authPw').value;
-const errEl=document.getElementById('authError'); errEl.textContent='';
-if((!email && !phoneRaw) || !pw){ errEl.textContent='Renseignez votre e-mail (ou téléphone) et votre mot de passe.'; return; }
-let loginEmail=email;
-if(!loginEmail && phoneRaw){
-const norm=normalizePhoneSN(phoneRaw);
-if(!norm){ errEl.textContent='Numéro invalide.'; return; }
-let stored=null; try{ stored=JSON.parse(localStorage.getItem(LS_DB_KEY)||'null'); }catch(e){}
-const found=((stored&&stored.users)||[]).find(u=>u.phoneNormalized===norm);
-if(!found || !found.email){ errEl.textContent='Aucun compte trouvé pour ce numéro.'; return; }
-loginEmail=found.email.toLowerCase();
+function phoneE164(raw){ const n=normalizePhoneSN(raw); return n ? '+'+n : null; }
+async function fetchAuthenticatedProfile(user){
+ if(!authClient || !user) throw new Error('Session non disponible.');
+ const {data,error}=await authClient.from('mouv_profiles').select('id,phone,full_name,role,status,created_at').eq('id',user.id).maybeSingle();
+ if(error) throw error;
+ if(!data) throw new Error('Profil introuvable. Contactez l’administrateur.');
+ return data;
 }
-if(loginEmail!==ADMIN_EMAIL || pw!==ADMIN_PASSWORD){ errEl.textContent='E-mail ou mot de passe incorrect.'; return; }
-try{ localStorage.setItem(LS_SESSION_KEY, ADMIN_EMAIL); }catch(e){}
-state.currentUserId=ADMIN_PROFILE.id;
-await startApp();
+function roleToAppRole(role){ return ['qg_national','coordinateur','militant'].includes(role)?role:'militant'; }
+async function activateAuthenticatedUser(user, profile){
+ if(profile.status!=='active'){
+   await authClient.auth.signOut(); authenticatedProfile=null; state.currentUserId=null;
+   throw new Error(profile.status==='pending'?'Votre compte est en attente de validation par l’administrateur.':'Votre compte n’est pas actif. Contactez l’administrateur.');
+ }
+ authenticatedProfile={...profile,role:roleToAppRole(profile.role)};
+ state.currentUserId=profile.role==='qg_national'?ADMIN_PROFILE.id:profile.id;
+ await startApp();
+}
+async function submitLogin(){
+ const phone=phoneE164(document.getElementById('authPhone')?.value||'');
+ const pw=document.getElementById('authPw')?.value||'';
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!supabaseAuthConfigured() || !authClient){ if(errEl) errEl.textContent='Connexion sécurisée non configurée : renseignez l’URL et la clé publique Supabase dans le fichier.'; return; }
+ if(!phone || !pw){ if(errEl) errEl.textContent='Renseignez un numéro de téléphone valide et votre mot de passe.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Connexion…';}
+ try{
+  const {data,error}=await authClient.auth.signInWithPassword({phone,password:pw});
+  if(error) throw new Error('Numéro de téléphone ou mot de passe incorrect.');
+  const profile=await fetchAuthenticatedProfile(data.user);
+  await activateAuthenticatedUser(data.user,profile);
+ }catch(e){ if(errEl) errEl.textContent=e.message||'Connexion impossible. Réessayez.'; if(btn){btn.disabled=false;btn.textContent='Se connecter';} }
+}
+async function submitSignup(){
+ const name=(document.getElementById('authName')?.value||'').trim();
+ const phone=phoneE164(document.getElementById('authPhone')?.value||'');
+ const pw=document.getElementById('authPw')?.value||'';
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!supabaseAuthConfigured() || !authClient){ if(errEl) errEl.textContent='Connexion sécurisée non configurée. Renseignez Supabase dans le fichier.'; return; }
+ if(name.length<2 || !phone || pw.length<10){ if(errEl) errEl.textContent='Indiquez votre nom, un téléphone valide et un mot de passe de 10 caractères minimum.'; return; }
+ const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Création…';}
+ try{
+  const {data,error}=await authClient.auth.signUp({phone,password:pw,options:{data:{full_name:name}}});
+  if(error) throw error;
+  pendingPhone=phone;
+  if(data.session && data.user){ renderAuthScreen('pending','Inscription reçue. Votre compte doit être validé par l’administrateur.'); await authClient.auth.signOut(); }
+  else { renderAuthScreen('verify-phone','Un code de vérification a été envoyé par SMS.'); }
+ }catch(e){ if(errEl) errEl.textContent=e.message||'Inscription impossible. Vérifiez le numéro.'; if(btn){btn.disabled=false;btn.textContent='Créer mon compte';} }
+}
+async function verifySignupPhone(){
+ const token=(document.getElementById('authOtp')?.value||'').trim();
+ const errEl=document.getElementById('authError'); if(errEl) errEl.textContent='';
+ if(!authClient || !pendingPhone || !/^\d{6}$/.test(token)){ if(errEl) errEl.textContent='Saisissez le code SMS à 6 chiffres.'; return; }
+ try{
+  const {data,error}=await authClient.auth.verifyOtp({phone:pendingPhone,token,type:'sms'});
+  if(error) throw error;
+  renderAuthScreen('pending','Numéro vérifié. Votre compte est maintenant en attente de validation par l’administrateur.');
+  await authClient.auth.signOut();
+ }catch(e){ if(errEl) errEl.textContent=e.message||'Code invalide ou expiré.'; }
 }
 async function submitSetPassword(){ renderAuthScreen('login'); }
 async function logout(){
-try{ localStorage.removeItem(LS_SESSION_KEY); }catch(e){}
-state.currentUserId=null; appStartedFor=null;
-renderAuthScreen('login');
+ try{ if(authClient) await authClient.auth.signOut(); localStorage.removeItem(LS_SESSION_KEY); }catch(e){}
+ authenticatedProfile=null; state.currentUserId=null; appStartedFor=null;
+ renderAuthScreen('login');
 }
 async function startApp(){
-appStartedFor=state.currentUserId;
-try{ await loadProfiles(); await loadFromSupabase(); }catch(e){ console.error(e); toast("Chargement des données locales impossible."); }
-document.getElementById('authScreen').style.display='none';
-document.getElementById('shell').style.display='flex';
-if(deepLinkReportId){ const rid=deepLinkReportId; deepLinkReportId=null; setView('report-detail',{activeReportId:rid}); } else { render(); }
+ appStartedFor=state.currentUserId;
+ try{
+  await loadProfiles(); await loadFromSupabase();
+  if(authenticatedProfile){
+   const p=authenticatedProfile;
+   const existing=DB.users.findIndex(u=>u.id===p.id);
+   const appUser={id:p.role==='qg_national'?ADMIN_PROFILE.id:p.id,name:p.full_name||'Membre',role:roleToAppRole(p.role),fonction:p.role==='qg_national'?'Secrétariat national':'Membre',email:ADMIN_EMAIL,actif:true,phone:p.phone||'',phoneNormalized:normalizePhoneSN(p.phone||'')||'',region:'',departement:'',commune:'',coordinateurId:''};
+   if(existing<0) DB.users.push(appUser); else DB.users[existing]={...DB.users[existing],...appUser};
+   saveLocal();
+  }
+ }catch(e){ console.error(e); toast('Chargement des données impossible.'); }
+ document.getElementById('authScreen').style.display='none';
+ document.getElementById('shell').style.display='flex';
+ if(deepLinkReportId){ const rid=deepLinkReportId; deepLinkReportId=null; setView('report-detail',{activeReportId:rid}); } else { render(); }
 }
 (async function init(){
-let sess=null; try{ sess=localStorage.getItem(LS_SESSION_KEY); }catch(e){}
-if(sess===ADMIN_EMAIL){ state.currentUserId=ADMIN_PROFILE.id; await startApp(); }
-else { renderAuthScreen('login'); }
+ if(!supabaseAuthConfigured() || !authClient){ renderAuthScreen('login','La connexion sécurisée doit être configurée par l’administrateur.'); return; }
+ try{
+  const {data,error}=await authClient.auth.getSession();
+  if(error) throw error;
+  const user=data.session?.user;
+  if(!user){ renderAuthScreen('login'); return; }
+  const profile=await fetchAuthenticatedProfile(user);
+  await activateAuthenticatedUser(user,profile);
+ }catch(e){ console.error(e); try{await authClient.auth.signOut();}catch(_){} renderAuthScreen('login',e.message||'Session expirée. Reconnectez-vous.'); }
 })();
 
 function renderAuthScreen(mode, errorMsg=''){
@@ -1558,6 +1682,9 @@ closeMobileSidebar();
 if(!el) return;
 el.style.display='flex'; el.style.minHeight='100dvh'; el.style.width='100%';
 const isSetPw = mode==='set-password';
+const isSignup = mode==='signup';
+const isVerify = mode==='verify-phone';
+const isPending = mode==='pending';
 el.innerHTML=`
 <style>
 #authScreen{display:flex;min-height:100dvh;width:100%;background:var(--bg);color:var(--ink-900);font-family:var(--font-body);}
@@ -1603,33 +1730,36 @@ el.innerHTML=`
 </div>
 <div class="form-panel"><div class="form-wrap">
 <span class="logo-full auth-logo" role="img" aria-label="Kiiraay, les patriotes républicains. La patrie d'abord."></span>
-<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':'Accès équipe'}</div>
-<h2>${isSetPw?'Activez votre compte':'Se connecter'}</h2>
-<p class="sub">${isSetPw?'Définissez votre mot de passe.':'Entrez vos identifiants pour accéder au tableau de bord.'}</p>
-${isSetPw? `
-<div class="field"><label>Nouveau mot de passe</label><input id="authPw1" type="password"></div>
-<div class="field"><label>Confirmez</label><input id="authPw2" type="password"></div>
+<div style="font-size:12px;color:var(--ink-500);">${isSetPw?'Activation du compte':isSignup?'Inscription membre':isVerify?'Vérification du téléphone':isPending?'Validation administrative':'Accès équipe'}</div>
+<h2>${isSetPw?'Activez votre compte':isSignup?'Créer un compte':isVerify?'Vérifier le numéro':isPending?'Demande enregistrée':'Se connecter'}</h2>
+<p class="sub">${isSetPw?'Définissez votre mot de passe.':isSignup?'Créez votre compte personnel. L’accès sera ouvert après validation.':isVerify?'Saisissez le code reçu par SMS.':isPending?'Votre compte ne pourra accéder à MOUV SUITE qu’après validation par l’administrateur.':'Connectez-vous avec votre numéro de téléphone et votre mot de passe.'}</p>
+${isSetPw ? `
+<div class="field"><label>Nouveau mot de passe</label><input id="authPw1" type="password" autocomplete="new-password"></div>
+<div class="field"><label>Confirmez</label><input id="authPw2" type="password" autocomplete="new-password"></div>
 <button class="submit" id="authSubmit">Activer mon compte</button>
+` : isSignup ? `
+<div class="field"><label>Nom complet</label><input id="authName" type="text" autocomplete="name" maxlength="120" required></div>
+<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
+<div class="field"><label>Mot de passe (10 caractères minimum)</label><input id="authPw" type="password" autocomplete="new-password" minlength="10" required></div>
+<button class="submit" id="authSubmit">Créer mon compte</button>
+` : isVerify ? `
+<div class="field"><label>Code reçu par SMS</label><input id="authOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required></div>
+<button class="submit" id="authSubmit">Vérifier le numéro</button>
+` : isPending ? `
+<button class="submit" id="authSubmit">Retour à la connexion</button>
 ` : `
-<div class="login-mode-toggle"><button type="button" class="login-mode-btn active" id="loginModeEmail">E-mail</button><button type="button" class="login-mode-btn" id="loginModePhone">Téléphone</button></div>
-<div class="field" id="fieldEmail"><label>Adresse e-mail</label><input id="authEmail" type="email" value="${ADMIN_EMAIL}" autocomplete="username"></div>
-<div class="field" id="fieldPhone" style="display:none"><label>Téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67"></div>
-<div class="field"><label>Mot de passe</label><input id="authPw" type="password" value="${ADMIN_PASSWORD}" autocomplete="current-password"></div>
+<div class="field"><label>Numéro de téléphone</label><input id="authPhone" type="tel" placeholder="+221 77 123 45 67" autocomplete="tel" required></div>
+<div class="field"><label>Mot de passe</label><input id="authPw" type="password" autocomplete="current-password" required></div>
 <button class="submit" id="authSubmit">Se connecter</button>
 `}
 <div id="authError" class="auth-error">${errorMsg||''}</div>
-${!isSetPw?`<p class="footnote">Pas de compte ? Contactez votre coordinateur.</p>`:''}
+${(!isSetPw && !isVerify && !isPending)?`<p class="footnote">${isSignup?'Déjà un compte ?':'Pas encore de compte ?'} <button type="button" id="authSwitch" style="border:0;background:none;color:var(--green-700);font-weight:700;cursor:pointer;text-decoration:underline;">${isSignup?'Se connecter':'Créer un compte membre'}</button></p>`:''}
 </div></div>`;
-const submit = isSetPw ? submitSetPassword : submitLogin;
-document.getElementById('authSubmit').onclick=submit;
-setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':'authEmail'); if(f) f.focus(); },0);
-el.querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); submit(); } }));
-if(!isSetPw){
-const be=document.getElementById('loginModeEmail'), bp=document.getElementById('loginModePhone');
-const fe=document.getElementById('fieldEmail'), fp=document.getElementById('fieldPhone');
-be.onclick=()=>{ be.classList.add('active'); bp.classList.remove('active'); fe.style.display=''; fp.style.display='none'; };
-bp.onclick=()=>{ bp.classList.add('active'); be.classList.remove('active'); fp.style.display=''; fe.style.display='none'; };
-}
+const submit = isSetPw ? submitSetPassword : isSignup ? submitSignup : isVerify ? verifySignupPhone : isPending ? (()=>renderAuthScreen('login')) : submitLogin;
+const submitBtn=document.getElementById('authSubmit'); if(submitBtn) submitBtn.onclick=submit;
+const switchBtn=document.getElementById('authSwitch'); if(switchBtn) switchBtn.onclick=()=>renderAuthScreen(isSignup?'login':'signup');
+setTimeout(()=>{ const f=document.getElementById(isSetPw?'authPw1':isSignup?'authName':isVerify?'authOtp':'authPhone'); if(f) f.focus(); },0);
+el.querySelectorAll('input').forEach(inp=>inp.addEventListener('keydown',e=>{ if(e.key==='Enter' && submitBtn){ e.preventDefault(); submit(); } }));
 }
 
 (function(){
