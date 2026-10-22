@@ -53,14 +53,14 @@ language sql
 stable
 security definer
 set search_path = public, auth
-as $
+as $$
   select m.commune
   from public.mouv_annuaire_members m
   where m.coordinator_auth_id = auth.uid()
     and m.member_role = 'coordinateur'
   order by m.created_at
   limit 1;
-$;
+$$;
 
 -- L'administrateur lit toutes les fiches ; un coordinateur lit sa commune.
 -- Les militants ne lisent les fiches complètes que via la vue publique limitée.
