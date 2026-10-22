@@ -1620,6 +1620,9 @@ async function submitSimpleMember(){
   }
   if(result.status==='pending'){ renderAuthScreen('pending','Votre demande est en attente de validation par l’administrateur.'); return; }
   if(result.status!=='active') throw new Error('Votre accès n’est pas actif. Contactez l’administrateur.');
+  // Le compte du QG national ne doit jamais entrer par le parcours simplifié nom + téléphone.
+  // L’administrateur doit utiliser le parcours séparé avec authentification Supabase.
+  if(result.role==='qg_national') throw new Error('Compte administrateur : utilisez « Accès administrateur » pour vous connecter.');
   simpleMemberProfile={id:result.id,phone:result.phone,full_name:result.full_name,role:result.role||'militant',status:'active'};
   authenticatedProfile={...simpleMemberProfile};
   state.currentUserId=simpleMemberProfile.id;
