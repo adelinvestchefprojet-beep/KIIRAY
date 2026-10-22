@@ -45,8 +45,25 @@ as $$
   limit 1;
 $$;
 
--- L'administrateur et les coordinateurs actifs peuvent lire les fiches complètes.
--- Les militants ne peuvent lire les fiches complètes via cette table.
+-- Fonction de périmètre communal exécutée avec les droits du propriétaire,
+-- afin d'éviter une récursion des politiques RLS.
+create or replace function public.mouv_current_commune()
+returns text
+language sql
+stable
+security definer
+set search_path = public, auth
+as $
+  select m.commune
+  from public.mouv_annuaire_members m
+  where m.coordinator_auth_id = auth.uid()
+    and m.member_role = 'coordinateur'
+  order by m.created_at
+  limit 1;
+$;
+
+-- L'administrateur lit toutes les fiches ; un coordinateur lit sa commune.
+-- Les militants ne lisent les fiches complètes que via la vue publique limitée.
 drop policy if exists mouv_annuaire_staff_read on public.mouv_annuaire_members;
 create policy mouv_annuaire_staff_read
 on public.mouv_annuaire_members
@@ -55,17 +72,7 @@ using (
   public.mouv_current_role() = 'qg_national'
   or (
     public.mouv_current_role() = 'coordinateur'
-    and (
-      coordinator_auth_id = auth.uid()
-      or lower(commune) = lower(coalesce((
-        select own_member.commune
-        from public.mouv_annuaire_members own_member
-        where own_member.coordinator_auth_id = auth.uid()
-          and own_member.member_role = 'coordinateur'
-        order by own_member.created_at
-        limit 1
-      ), ''))
-    )
+    and lower(commune) = lower(coalesce(public.mouv_current_commune(), ''))
   )
 );
 
@@ -195,6 +202,8 @@ $$;
 -- La vue n'expose aucune donnée privée. La fonction d'ajout contrôle le rôle côté serveur.
 revoke all on function public.mouv_current_role() from public;
 grant execute on function public.mouv_current_role() to authenticated;
+revoke all on function public.mouv_current_commune() from public;
+grant execute on function public.mouv_current_commune() to authenticated;
 revoke all on function public.mouv_add_directory_member(text,text,text,text,uuid) from public, anon;
 grant execute on function public.mouv_add_directory_member(text,text,text,text,uuid) to authenticated;
 
