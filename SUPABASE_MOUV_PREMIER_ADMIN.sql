@@ -1,7 +1,9 @@
--- MOUV SUITE — première création sécurisée du compte administrateur
+-- MOUV SUITE — première création sécurisée du compte administrateur par e-mail
 -- À exécuter UNE FOIS dans Supabase > SQL Editor.
 -- Cette migration ne supprime aucune table ni aucune donnée.
--- Le bootstrap est limité au numéro prévu +221 77 441 16 33.
+-- L'administrateur initial est strictement limité à kiiraysn@gmail.com.
+-- Le compte Auth doit être créé manuellement par le propriétaire du projet et son e-mail confirmé.
+
 begin;
 
 create or replace function public.mouv_first_admin_exists()
@@ -29,11 +31,11 @@ set search_path = public, auth
 as $$
 declare
   v_user auth.users%rowtype;
-  v_phone text;
   v_name text;
+  v_email text;
 begin
   if auth.uid() is null then
-    raise exception 'Vous devez confirmer le compte téléphone avant la configuration.';
+    raise exception 'Connectez-vous avec le compte administrateur avant de continuer.';
   end if;
 
   -- Sérialise les tentatives concurrentes : un seul premier administrateur.
@@ -55,13 +57,13 @@ begin
     raise exception 'Compte Auth introuvable.';
   end if;
 
-  v_phone := regexp_replace(coalesce(v_user.phone, ''), '[^0-9]', '', 'g');
-  if v_phone <> '221774411633' then
-    raise exception 'La première configuration est réservée au numéro +221 77 441 16 33.';
+  v_email := lower(trim(coalesce(v_user.email, '')));
+  if v_email <> 'kiiraysn@gmail.com' then
+    raise exception 'La première configuration est réservée à kiiraysn@gmail.com.';
   end if;
 
-  if v_user.phone_confirmed_at is null then
-    raise exception 'Le numéro doit être confirmé avant de créer le profil administrateur.';
+  if v_user.email_confirmed_at is null then
+    raise exception 'L’adresse e-mail doit être confirmée dans Supabase avant d’activer l’administrateur.';
   end if;
 
   if exists (select 1 from public.mouv_profiles p where p.id = v_user.id) then
@@ -70,11 +72,11 @@ begin
 
   v_name := nullif(trim(coalesce(p_full_name, v_user.raw_user_meta_data->>'full_name', '')), '');
   if v_name is null then
-    raise exception 'Nom complet manquant. Recommencez la configuration avec votre nom.';
+    raise exception 'Nom complet manquant. Recommencez avec votre nom.';
   end if;
 
   insert into public.mouv_profiles (id, phone, full_name, role, status)
-  values (v_user.id, v_user.phone, v_name, 'qg_national', 'active');
+  values (v_user.id, coalesce(v_user.phone, ''), v_name, 'qg_national', 'active');
 
   return true;
 end;
