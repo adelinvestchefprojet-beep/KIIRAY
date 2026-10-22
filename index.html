@@ -1638,7 +1638,11 @@ async function submitLogin(){
  const btn=document.getElementById('authSubmit'); if(btn){btn.disabled=true;btn.textContent='Connexion…';}
  try{
   const {data,error}=await authClient.auth.signInWithPassword({phone,password:pw});
-  if(error) throw new Error('Numéro de téléphone ou mot de passe incorrect.');
+  if(error){
+   console.error('Supabase Auth login failed:', {status:error.status, code:error.code, message:error.message});
+   const detail=error.code||error.status||'AUTH_ERROR';
+   throw new Error('Échec de connexion ('+detail+') : '+(error.message||'Vérifiez le compte téléphone et son mot de passe dans Supabase.'));
+  }
   const profile=await fetchAuthenticatedProfile(data.user);
   await activateAuthenticatedUser(data.user,profile);
  }catch(e){ if(errEl) errEl.textContent=e.message||'Connexion impossible. Réessayez.'; if(btn){btn.disabled=false;btn.textContent='Se connecter';} }
