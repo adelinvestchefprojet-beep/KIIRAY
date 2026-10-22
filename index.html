@@ -645,7 +645,8 @@ document.getElementById('sidebar').innerHTML=`
 <div class="brand"><div class="brand-mark"><span class="logo-emblem" role="img" aria-label="Kiiraay"></span></div><div class="brand-text"><div class="b1">MOUV&nbsp;SUITE</div><div class="b2">Gestion des activités militantes</div></div></div>
 <nav class="nav">
 ${allowedNavItems(u).map(it=>`<button class="nav-item ${state.view===it.id || (state.view==='report-detail' && it.id==='reports')?'active':''}" data-nav="${it.id}">${icon(it.icon)}<span>${it.label}</span></button>`).join('')}
-${isQG(u) ? `<div class="nav-section-label">Administration</div><button class="nav-item ${state.view==='membres'?'active':''}" data-nav="membres">${icon('usersBadge')}<span>Militants & rôles</span></button>` : ''}
+<div class="nav-section-label">Communauté</div><button class="nav-item ${state.view==='annuaire'?'active':''}" data-nav="annuaire">${icon('usersBadge')}<span>Annuaire des membres</span></button>
+${isQG(u) ? `<div class="nav-section-label">Administration</div><button class="nav-item ${state.view==='membres'?'active':''}" data-nav="membres">${icon('usersBadge')}<span>Gestion locale</span></button>` : ''}
 </nav>
 <div class="sidebar-footer"><div style="width:100%">
 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -1062,6 +1063,74 @@ ${r.isShared? `<p style="font-size:12.8px;color:var(--ink-600);line-height:1.6;m
 </div>
 </div>
 </div>`;
+}
+
+
+// Annuaire partagé : les membres consultent les noms/communes; seuls les responsables voient les téléphones.
+let annuaireCache=[];
+function escapeAnnuaire(v){ return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function viewAnnuaire(){
+ const u=currentUser(), canManage=isCoordOrAbove(u);
+ return `<div class="page-head"><div><h1>Annuaire des membres</h1><div class="sub">Liste partagée, consultable par commune. Les numéros restent réservés aux responsables.</div></div>${canManage?'<button class="btn btn-primary" id="annuaireAddBtn">＋ Ajouter un membre</button>':''}</div>
+ <div class="card card-pad"><div class="field" style="max-width:360px"><label>Filtrer par commune</label><input id="annuaireFilter" type="search" placeholder="Saisir une commune…"></div><div id="annuaireTable"><div class="empty-state">Chargement de l’annuaire…</div></div></div>`;
+}
+function drawAnnuaire(filter=''){
+ const u=currentUser(), canManage=isCoordOrAbove(u), term=filter.trim().toLocaleLowerCase('fr');
+ const rows=annuaireCache.filter(m=>!term||(m.commune||'').toLocaleLowerCase('fr').includes(term)||(m.full_name||'').toLocaleLowerCase('fr').includes(term)).sort((a,b)=>(a.commune||'').localeCompare(b.commune||'','fr')||(a.full_name||'').localeCompare(b.full_name||'','fr'));
+ const host=document.getElementById('annuaireTable'); if(!host)return;
+ host.innerHTML=rows.length?`<div class="table-scroll"><table class="tasks-table"><thead><tr><th>Nom complet</th><th>Commune</th><th>Rôle</th>${canManage?'<th>Téléphone</th>':''}</tr></thead><tbody>${rows.map(m=>`<tr><td><strong>${escapeAnnuaire(m.full_name)}</strong></td><td>${escapeAnnuaire(m.commune)}</td><td><span class="badge ${m.member_role==='coordinateur'?'badge-green':'badge-gray'}">${m.member_role==='coordinateur'?'Coordinateur':'Militant'}</span></td>${canManage?`<td>${escapeAnnuaire(m.phone||'—')}</td>`:''}</tr>`).join('')}</tbody></table></div><div class="hint" style="margin-top:12px">${rows.length} membre(s) affiché(s).</div>`:'<div class="empty-state"><div class="t">Aucun membre trouvé</div></div>';
+}
+async function loadAnnuaire(){
+ if(!authClient) throw new Error('Connexion Supabase indisponible.');
+ const u=currentUser(), canManage=isCoordOrAbove(u);
+ if(canManage){
+  const {data,error}=await authClient.from('mouv_annuaire_members').select('id,full_name,phone,commune,member_role,coordinator_auth_id,created_at').order('commune').order('full_name');
+  if(error) throw error;
+  annuaireCache=data||[];
+ } else {
+  const {data,error}=await authClient.from('mouv_public_members').select('id,full_name,commune,member_role,created_at').order('commune').order('full_name');
+  if(error) throw error;
+  annuaireCache=data||[];
+ }
+}
+function wireAnnuaire(){
+ const filter=document.getElementById('annuaireFilter');
+ if(filter) filter.oninput=()=>drawAnnuaire(filter.value);
+ const add=document.getElementById('annuaireAddBtn');
+ if(add) add.onclick=()=>openAnnuaireAddModal();
+ loadAnnuaire().then(()=>drawAnnuaire(filter?.value||'')).catch(e=>{
+ console.error('Chargement annuaire:',e);
+ const host=document.getElementById('annuaireTable');
+ if(host) host.innerHTML='<div class="empty-state"><div class="t">Annuaire non chargé</div><p>Vérifiez que la migration SQL est appliquée et que votre profil Supabase est actif.</p></div>';
+ });
+}
+function openAnnuaireAddModal(){
+ const u=currentUser(); if(!isCoordOrAbove(u)) return;
+ const isAdmin=isQG(u);
+ const overlay=document.createElement('div'); overlay.className='modal-overlay';
+ overlay.innerHTML=`<div class="modal-card"><div class="modal-head"><h3>Ajouter un membre</h3><button class="icon-btn" id="annClose">${icon('x','icon-sm')}</button></div>
+ <div class="modal-body">
+ <div class="field"><label>Nom complet *</label><input id="annName" required></div>
+ <div class="field"><label>Téléphone *</label><input id="annPhone" type="tel" placeholder="+221 77 123 45 67" required></div>
+ <div class="field"><label>Commune *</label><input id="annCommune" required placeholder="${isAdmin?'Commune du membre':'Votre commune'}"></div>
+ ${isAdmin?`<div class="field"><label>Rôle</label><select id="annRole"><option value="militant">Militant</option><option value="coordinateur">Coordinateur</option></select></div><div class="field"><label>Identifiant Auth du coordinateur (UUID, si coordinateur)</label><input id="annCoordAuth" placeholder="À renseigner pour relier un compte coordinateur"></div><div class="hint">Un coordinateur doit d’abord disposer d’un compte Auth et d’un profil actif avec le rôle coordinateur dans Supabase.</div>`:'<div class="hint">Vous pouvez ajouter uniquement des militants de votre commune.</div>'}
+ </div><div class="modal-foot"><button class="btn btn-outline" id="annCancel">Annuler</button><button class="btn btn-primary" id="annSave">Enregistrer</button></div></div>`;
+ document.body.appendChild(overlay);
+ const close=()=>overlay.remove(); overlay.querySelector('#annClose').onclick=close; overlay.querySelector('#annCancel').onclick=close;
+ overlay.querySelector('#annSave').onclick=async()=>{
+  const full_name=overlay.querySelector('#annName').value.trim(), phone=overlay.querySelector('#annPhone').value.trim(), commune=overlay.querySelector('#annCommune').value.trim();
+  const member_role=isAdmin?overlay.querySelector('#annRole').value:'militant';
+  const rawCoord=isAdmin?overlay.querySelector('#annCoordAuth').value.trim():'';
+  if(full_name.length<2||phone.replace(/\D/g,'').length<6||commune.length<2){toast('Renseignez le nom, un téléphone valide et la commune.','error');return;}
+  if(member_role==='coordinateur'&&!rawCoord){toast('Pour relier un coordinateur, renseignez son UUID Auth actif.','error');return;}
+  if(rawCoord&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawCoord)){toast('UUID Auth invalide.','error');return;}
+  const btn=overlay.querySelector('#annSave');btn.disabled=true;btn.textContent='Enregistrement…';
+  try{
+   const {error}=await authClient.rpc('mouv_add_directory_member',{p_full_name:full_name,p_phone:phone,p_commune:commune,p_member_role:member_role,p_coordinator_auth_id:rawCoord||null});
+   if(error) throw error;
+   toast('Membre ajouté à l’annuaire.');close();await loadAnnuaire();drawAnnuaire(document.getElementById('annuaireFilter')?.value||'');
+  }catch(e){console.error(e);toast(e.message||'Ajout impossible. Vérifiez vos droits et le profil du coordinateur.','error');btn.disabled=false;btn.textContent='Enregistrer';}
+ };
 }
 
 function viewMembres(){
@@ -1525,6 +1594,7 @@ else if(state.view==='new-publication'){ c.innerHTML=viewNewPublication(); wireN
 else if(state.view==='publication-detail'){ c.innerHTML=viewPublicationDetail(); wirePublicationDetail(); }
 else if(state.view==='tasks') c.innerHTML=viewTasks();
 else if(state.view==='approvals'){ c.innerHTML=viewApprovals(); wireApprovals(); }
+else if(state.view==='annuaire'){ c.innerHTML=viewAnnuaire(); wireAnnuaire(); }
 else if(state.view==='membres'){ c.innerHTML=viewMembres(); wireMembres(); }
 c.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>setView(b.dataset.nav));
 c.querySelectorAll('[data-goto-report]').forEach(b=>b.onclick=()=>setView('report-detail',{activeReportId:b.dataset.gotoReport}));
