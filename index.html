@@ -590,7 +590,7 @@ let deepLinkReportId = initialReportId;
 function currentUser(){return userById(state.currentUserId);}
 function setView(view,params={}){
  const u=currentUser();
- if(isSimpleMember(u) && !['dashboard','reports','report-detail','publications','publication-detail'].includes(view)){ toast('Cette rubrique est réservée aux responsables.'); return; }
+ if(isSimpleMember(u) && !['dashboard','reports','report-detail','publications','publication-detail','annuaire'].includes(view)){ toast('Cette rubrique est réservée aux responsables.'); return; }
  state.view=view; state.editingReportId=null; Object.assign(state,params); window.scrollTo(0,0); render();
 }
 function toast(msg,type='ok'){
